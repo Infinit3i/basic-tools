@@ -34,12 +34,21 @@ def generate_suricata_ip_rule(ip):
     return f"alert ip {ip} any -> any any (msg:\"Suspicious IP detected: {ip}\"; sid:1000001;)\n"
 
 # Function to generate a single consolidated YARA rule for IPs and Hashes
-def generate_yara_rule(ips, md5_hashes, sha256_hashes):
-    rule = "rule suspicious_IOCs {\n"
+def generate_yara_rule(ips, md5_hashes, sha256_hashes, creator_name):
+    # Get the current date for rule generation
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    
+    # Start of the YARA rule
+    rule = f"rule_{base_filename}_IOCs \n"
+    
+    # Meta information with creator and date
     rule += "  meta:\n"
+    rule += f"    creator = \"{creator_name}\"\n"
+    rule += f"    date = \"{current_date}\"\n"
     rule += "    description = \"Suspicious IPs and Hashes\"\n"
 
     rule += "  strings:\n"
+    
     # Add IPs to the YARA rule
     for ip in ips:
         rule += f"    $ip_{ip.replace('.', '_')} = \"{ip}\"\n"
@@ -59,7 +68,7 @@ def generate_yara_rule(ips, md5_hashes, sha256_hashes):
     return rule
 
 # Main function to process file and generate rules
-def generate_rules_from_file(file_path, base_filename):
+def generate_rules_from_file(file_path, base_filename, creator_name):
     data = read_file(file_path)
     ips, md5_hashes, sha256_hashes = extract_ips_and_hashes(data)
     
@@ -89,8 +98,8 @@ def generate_rules_from_file(file_path, base_filename):
     with open(suricata_file_path, "w") as suricata_file:
         suricata_file.writelines(suricata_rules)
     
-    # Generate a single YARA rule
-    yara_rule = generate_yara_rule(ips, md5_hashes, sha256_hashes)
+    # Generate a single YARA rule with the creator's name
+    yara_rule = generate_yara_rule(ips, md5_hashes, sha256_hashes, creator_name)
     
     # Save the YARA rule to a .yar file
     with open(yara_file_path, "w") as yara_file:
@@ -100,7 +109,8 @@ def generate_rules_from_file(file_path, base_filename):
     print(f"YARA rules saved to: {yara_file_path}")
 
 # Example usage:
+creator_name = input("Enter your name (for YARA creator): ")  # Ask user for their name
 file_path = input("Enter the path to your file: ")  # e.g., path_to_your_file.txt or path_to_your_file.xlsx
 base_filename = input("Enter the base filename for the output: ")  # e.g., "Magic Hound"
 
-generate_rules_from_file(file_path, base_filename)
+generate_rules_from_file(file_path, base_filename, creator_name)
