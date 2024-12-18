@@ -7,5 +7,5 @@
 Ping Script
 - finds any ip in a /24 range you need
 
-Convert IOCs
+[Convert IOCs](https://github.com/Infinit3i/basic-tools/blob/88a3441757c338212b086a433410c5555388f1a4/IOC-Converter/converter.py)
 - converts IOCs from text or XLS to suricata and yara format
