@@ -1,3 +1,7 @@
+IOC-Converter/Install/converts
+IOC-Converter/converts/
+IOC-Converter/CREATED_IOCs
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
