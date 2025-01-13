@@ -3,7 +3,7 @@ import re
 import datetime
 import os
 from typing import Tuple, Set, List
-
+import random
 
 def read_file(file_path):
     # Check if the file exists
@@ -15,7 +15,7 @@ def read_file(file_path):
         return pd.read_excel(file_path)
     elif file_path.endswith('.txt'):
         with open(file_path, 'r') as file:
-            return file.readlines()
+            return file.read()  # Read the entire file content as a single string
     else:
         raise ValueError("Unsupported file format. Please provide a .txt or .xls file.")
 
@@ -28,22 +28,21 @@ def extract_ips_hashes_domains(data: str) -> Tuple[Set[str], Set[str], Set[str],
     ipv4_regex = r'\b(?:\d{1,3}\[?\.\]?){3}\d{1,3}\b'  # Match IPv4 with [.] or .
     ipv6_regex = r'\b([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}\b'  # Match standard IPv6
     md5_regex = r'\b[a-f0-9]{32}\b'  # Match MD5
-    sha1_regex = r'\b[a-f0-9]{40}\b'  # Match SHA1
+    sha1_regex = re.compile(r'\b[a-f0-9]{40}\b', re.IGNORECASE)  # Match SHA1 with case insensitivity
     sha256_regex = r'\b[a-f0-9]{64}\b'  # Match SHA256
     domain_regex = r'\b(?:[a-zA-Z0-9-]+\[?\.\]?)+[a-zA-Z]{2,}\b'  # Match domains with [.] or .
 
     # Apply regex and clean '[.]' to '.'
-    ipv4 = {clean_value(ip) for ip in re.findall(ipv4_regex, str(data))}
-    ipv6 = {clean_value(ip) for ip in re.findall(ipv6_regex, str(data))}
-    md5 = {clean_value(hash) for hash in re.findall(md5_regex, str(data))}
-    sha1 = {clean_value(hash) for hash in re.findall(sha1_regex, str(data))}
-    sha256 = {clean_value(hash) for hash in re.findall(sha256_regex, str(data))}
-    domains = {clean_value(domain) for domain in re.findall(domain_regex, str(data))}
+    ipv4 = {clean_value(ip) for ip in re.findall(ipv4_regex, data)}
+    ipv6 = {clean_value(ip) for ip in re.findall(ipv6_regex, data)}
+    md5 = {clean_value(hash) for hash in re.findall(md5_regex, data)}
+    sha1 = {clean_value(hash) for hash in sha1_regex.findall(data)}
+    sha256 = {clean_value(hash) for hash in re.findall(sha256_regex, data)}
+    domains = {clean_value(domain) for domain in re.findall(domain_regex, data)}
 
     return ipv4, ipv6, md5, sha1, sha256, domains
 
-
-def append_to_csv(filename: str, data: Set[str], data_type: str) -> None:
+def append_to_csv(filename: str, data: Set[str], data_type: str, malware_family: str) -> None:
     if not data:  # Skip if the data set is empty
         return
 
@@ -55,10 +54,10 @@ def append_to_csv(filename: str, data: Set[str], data_type: str) -> None:
     file_path = os.path.join(output_folder, f"{filename}.csv")
 
     # Define the structure of the DataFrame
-    columns = ["Value", "Type", "Malware Families", "Kill Chain", "Additional Info"]
+    columns = ["Value", "Type", "malware_families", "kill_chains", "severity", "Additional Info"]
     new_data = pd.DataFrame(
         [
-            [value, data_type, "<malware families>", "<kill chain>", ""]
+            [value, data_type, f'"{malware_family.strip()}"', "<kill chain>", "", ""]
             for value in data
         ],
         columns=columns,
@@ -73,21 +72,19 @@ def append_to_csv(filename: str, data: Set[str], data_type: str) -> None:
         combined_data = pd.concat([existing_data, new_data]).drop_duplicates(subset="Value")
         combined_data.to_csv(file_path, index=False)
 
-
-# Function to generate Suricata rules for IPs
 def generate_suricata_ip_rule(ip: str) -> str:
+    sid = random.randint(100000000, 999999999)
     # Rule for IP as the source (sending)
-    sending_rule = f"alert ip {ip} any -> any any (msg:\"Suspicious IP detected: {ip} (source)\"; sid:1000001; rev:1; classtype:trojan-activity;)\n"
+    sending_rule = f"alert ip {ip} any -> any any (msg:\"Suspicious {base_filename} IP detected Entering Network: {ip} (source)\"; sid:{sid}; rev:1; classtype:trojan-activity;)\n"
     # Rule for IP as the destination (receiving)
-    receiving_rule = f"alert ip any any -> {ip} any (msg:\"Suspicious IP detected: {ip} (destination)\"; sid:1000002; rev:1; classtype:trojan-activity;)\n"
+    receiving_rule = f"alert ip any any -> {ip} any (msg:\"Suspicious {base_filename} IP detected Leaving Network: {ip} (destination)\"; sid:{sid + 1}; rev:1; classtype:trojan-activity;)\n"
 
     return sending_rule + receiving_rule
 
-# Function to generate a single consolidated YARA rule for IPs and Hashes
 def generate_yara_rule(ips, md5_hashes, sha1_hashes, sha256_hashes, domains, creator_name):
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
-    rule = f"rule_{base_filename}_IOCs \n"
+    rule = f"{base_filename}_IOCs {{ \n"
     rule += "  meta:\n"
     rule += f"    creator = \"{creator_name}\"\n"
     rule += f"    date = \"{current_date}\"\n"
@@ -107,22 +104,24 @@ def generate_yara_rule(ips, md5_hashes, sha1_hashes, sha256_hashes, domains, cre
 
     rule += "  condition:\n"
     rule += "    any of them\n"
-
+    rule += "}\n"
+    
     return rule
 
-# Main function to process file and generate rules
 def generate_rules_from_file(file_path: str, base_filename: str, creator_name: str) -> None:
     data = read_file(file_path)
     ip, ipv6, md5, sha1, sha256, domain = extract_ips_hashes_domains(data)
 
-    append_to_csv("md5", md5, "md5")
-    append_to_csv("sha1", sha1, "sha1")
-    append_to_csv("sha256", sha256, "sha256")
-    append_to_csv("ip", ip, "IPv4")
-    append_to_csv("ipv6", ipv6, "IPv6")
-    append_to_csv("domains", domain, "domain")
+    malware_family = input("Is this file associated with any malware family? If yes, please specify (or press Enter to skip): ")
 
-    suricata_rules: List[str] = [generate_suricata_ip_rule(ip) for ip in ipv4]
+    append_to_csv("md5", md5, "md5", malware_family)
+    append_to_csv("sha1", sha1, "sha1", malware_family)
+    append_to_csv("sha256", sha256, "sha256", malware_family)
+    append_to_csv("ip", ip, "IPv4", malware_family)
+    append_to_csv("ipv6", ipv6, "IPv6", malware_family)
+    append_to_csv("domains", domain, "domain", malware_family)
+
+    suricata_rules: List[str] = [generate_suricata_ip_rule(ip) for ip in ip]
     
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     suricata_filename = f"{base_filename}-suricata-{current_date}.txt"
@@ -137,7 +136,7 @@ def generate_rules_from_file(file_path: str, base_filename: str, creator_name: s
     with open(suricata_file_path, "w") as suricata_file:
         suricata_file.writelines(suricata_rules)
 
-    yara_rule = generate_yara_rule(ipv4, md5, sha1, sha256, domains, creator_name)
+    yara_rule = generate_yara_rule(ip, md5, sha1, sha256, domain, creator_name)
     with open(yara_file_path, "w") as yara_file:
         yara_file.write(yara_rule)
 
