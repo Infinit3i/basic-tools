@@ -114,8 +114,8 @@ def generate_rules_from_file(file_path: str, base_filename: str, creator_name: s
     data = read_file(file_path)
     ip, ipv6, md5, sha1, sha256, domain = extract_ips_hashes_domains(data)
 
-    malware_family = input("Is this file associated with any malware family? If yes, please specify (or press Enter to skip): ")
-    apt_group = input("Is this file associated with any APT group? If yes, please specify (or press Enter to skip): ")
+    malware_family = input("Malware family? (or press Enter to skip): ")
+    apt_group = input("APT group? (or press Enter to skip): ")
 
     append_to_csv("md5", md5, "md5", malware_family, apt_group)
     append_to_csv("sha1", sha1, "sha1", malware_family, apt_group)
@@ -147,7 +147,7 @@ def generate_rules_from_file(file_path: str, base_filename: str, creator_name: s
     print(f"YARA rules saved to: {yara_file_path}")
 
 # Example usage:
-creator_name = input("Enter your name (for YARA creator): ")
+creator_name = input("Enter your name: ")
 file_path = input("Enter the path to your file: ")
 base_filename = input("Enter the base filename for the output: ")
 
