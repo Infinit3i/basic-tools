@@ -73,7 +73,7 @@ def append_to_csv(filename: str, data: Set[str], data_type: str, malware_family:
         combined_data.to_csv(file_path, index=False)
 
 def generate_suricata_ip_rule(ip: str) -> str:
-    sid = random.randint(100000000, 999999999)
+    sid = random.randint(100000000, 9999999999)
     # Rule for IP as the source (sending)
     sending_rule = f"alert ip {ip} any -> any any (msg:\"Suspicious {base_filename} IP detected Entering Network: {ip} (source)\"; sid:{sid}; rev:1; classtype:trojan-activity;)\n"
     # Rule for IP as the destination (receiving)
